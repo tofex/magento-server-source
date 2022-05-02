@@ -63,7 +63,7 @@ if [[ ! -f "${magentoExcludeList}" ]]; then
   exit 1
 fi
 
-sourceExcludeFile="${currentPath}/exclude.list"
+sourceExcludeFile="${currentPath}/../var/source/exclude.list"
 
 if [[ ! -f "${sourceExcludeFile}" ]]; then
   echo "No exclude list generated"
