@@ -1,11 +1,11 @@
 {
   "name": "tofex/magento-server-source",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "type": "magento-server-component",
   "description": "Tofex Magento Server Source",
   "license": "MIT",
   "require": {
-    "php": ">=7.2.0"
+    "php": ">=7.0"
   },
   "extra": {
     "installer-name": "source"
