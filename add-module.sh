@@ -22,6 +22,9 @@ trim()
   echo -n "$1" | xargs
 }
 
+moduleName=
+moduleVersion=
+
 while getopts hm:v:? option; do
   case "${option}" in
     h) usage; exit 1;;
@@ -41,6 +44,6 @@ if [[ -z "${moduleVersion}" ]]; then
   moduleVersion="any"
 fi
 
-"${currentPath}/../core/script/run.sh" "install,webServer" "${currentPath}/add-module/web-server.sh" \
+"${currentPath}/../core/script/run.sh" "webServer" "${currentPath}/add-module/web-server.sh" \
   --moduleName "${moduleName}" \
   --moduleVersion "${moduleVersion}"

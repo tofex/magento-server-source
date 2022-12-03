@@ -11,7 +11,6 @@ usage: ${scriptName} options
 
 OPTIONS:
   --help            Show this message
-  --magentoVersion  Magento version
   --webPath         Web path
   --webUser         Web user (optional)
   --webGroup        Web group (optional)
@@ -22,7 +21,6 @@ Example: ${scriptName}
 EOF
 }
 
-magentoVersion=
 webPath=
 webUser=
 webGroup=
@@ -33,12 +31,6 @@ if [[ -f "${currentPath}/../../core/prepare-parameters.sh" ]]; then
   source "${currentPath}/../../core/prepare-parameters.sh"
 elif [[ -f /tmp/prepare-parameters.sh ]]; then
   source /tmp/prepare-parameters.sh
-fi
-
-if [[ -z "${magentoVersion}" ]]; then
-  echo "No Magento version specified!"
-  usage
-  exit 1
 fi
 
 if [[ -z "${webPath}" ]]; then
@@ -72,5 +64,5 @@ cd "${webPath}"
 if [[ "${moduleVersion}" == "any" ]]; then
   composer require "${moduleName}"
 else
-  composer require "${moduleName}:moduleVersion"
+  composer require "${moduleName}:${moduleVersion}"
 fi
