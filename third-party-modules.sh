@@ -21,9 +21,9 @@ active=
 source "${currentPath}/../core/prepare-parameters.sh"
 
 if [[ "${active}" == 1 ]]; then
-  moduleList=( $("${currentPath}/../core/script/run-quiet.sh" "webServer" "${currentPath}/third-party-modules/web-server.sh" --active | sort -n) )
+  moduleList=( $("${currentPath}/../core/script/run-quiet.sh" "webServer" "${currentPath}/modules/web-server.sh" --active | sort -n) )
 else
-  moduleList=( $("${currentPath}/../core/script/run-quiet.sh" "webServer" "${currentPath}/third-party-modules/web-server.sh" | sort -n) )
+  moduleList=( $("${currentPath}/../core/script/run-quiet.sh" "webServer" "${currentPath}/modules/web-server.sh" | sort -n) )
 fi
 
 "${currentPath}/../core/script/run-quiet.sh" "install" "${currentPath}/third-party-modules/install.sh" \
