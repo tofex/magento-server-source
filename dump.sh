@@ -1,5 +1,6 @@
 #!/bin/bash -e
 
+currentPath="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 scriptName="${0##*/}"
 
 usage()
@@ -8,35 +9,18 @@ cat >&2 << EOF
 usage: ${scriptName} options
 
 OPTIONS:
-  -h  Show this message
-  -g  Add git branch
-  -i  Include Magento files
-  -u  Upload file to Tofex server
+  --help                 Show this message
+  --includeMagentoFiles  Include Magento files
+  --upload               Upload file to Tofex server
 
-Example: ${scriptName} -u
+Example: ${scriptName} --upload
 EOF
 }
 
-trim()
-{
-  echo -n "$1" | xargs
-}
-
-#git=0
 includeMagentoFiles=0
 upload=0
 
-while getopts hgiu? option; do
-  case "${option}" in
-    h) usage; exit 1;;
-    #g) git=1;;
-    i) includeMagentoFiles=1;;
-    u) upload=1;;
-    ?) usage; exit 1;;
-  esac
-done
-
-currentPath="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+source "${currentPath}/../core/prepare-parameters.sh"
 
 if [[ ! -f "${currentPath}/../env.properties" ]]; then
   echo "No environment specified!"
@@ -52,11 +36,7 @@ if [[ "${includeMagentoFiles}" == 0 ]] && [[ ! -f "${versionExcludeList}" ]]; th
   exit 1
 fi
 
-if [[ "${magentoVersion:0:1}" == 1 ]]; then
-  magentoExcludeList="${currentPath}/lists/exclude-1.list"
-else
-  magentoExcludeList="${currentPath}/lists/exclude-2.list"
-fi
+magentoExcludeList="${currentPath}/lists/exclude-${magentoVersion:0:1}.list"
 
 if [[ ! -f "${magentoExcludeList}" ]]; then
   echo "No exclude list found. Expected at: ${magentoExcludeList}"
@@ -65,12 +45,12 @@ fi
 
 sourceExcludeFile="${currentPath}/../var/source/exclude.list"
 
-if [[ ! -f "${sourceExcludeFile}" ]]; then
-  echo "No exclude list generated"
-  exit 1
-fi
+sourcePath="${currentPath}/../var/source"
+sourceTempPath="${sourcePath}/tmp"
 
-dumpExcludeList="/tmp/dump-exclude.list"
+mkdir -p "${sourceTempPath}"
+
+dumpExcludeList="${sourceTempPath}/dump-exclude.list"
 
 rm -rf "${dumpExcludeList}"
 touch "${dumpExcludeList}"
@@ -85,14 +65,46 @@ while IFS='' read -r line || [[ -n "$line" ]]; do
   echo "${line}" >> "${dumpExcludeList}"
 done < "${magentoExcludeList}"
 
+if [[ -f "${sourceExcludeFile}" ]]; then
+  while IFS='' read -r line || [[ -n "$line" ]]; do
+    echo "${line}" >> "${dumpExcludeList}"
+  done < "${sourceExcludeFile}"
+else
+  echo "No source exclude list available."
+fi
+
+magentoIncludeList="${currentPath}/lists/include-${magentoVersion:0:1}.list"
+
+if [[ ! -f "${magentoIncludeList}" ]]; then
+  echo "No include list found. Expected at: ${magentoIncludeList}"
+  exit 1
+fi
+
+sourceIncludeFile="${currentPath}/../var/source/include.list"
+
+dumpIncludeList="${sourceTempPath}/dump-include.list"
+
+rm -rf "${dumpIncludeList}"
+touch "${dumpIncludeList}"
+
 while IFS='' read -r line || [[ -n "$line" ]]; do
-  echo "${line}" >> "${dumpExcludeList}"
-done < "${sourceExcludeFile}"
+  echo "${line}" >> "${dumpIncludeList}"
+done < "${magentoIncludeList}"
+
+if [[ -f "${sourceIncludeFile}" ]]; then
+  while IFS='' read -r line || [[ -n "$line" ]]; do
+    echo "${line}" >> "${dumpIncludeList}"
+  done < "${sourceIncludeFile}"
+else
+  echo "No source include list available."
+fi
 
 date=$(date +%Y-%m-%d)
 
+dumpRepoPath="${sourceTempPath}/repo"
+
 cd "${currentPath}"
-rm -rf /tmp/repo
+rm -rf "${dumpRepoPath}"
 
 serverList=( $(ini-parse "${currentPath}/../env.properties" "yes" "system" "server") )
 if [[ "${#serverList[@]}" -eq 0 ]]; then
@@ -101,55 +113,44 @@ if [[ "${#serverList[@]}" -eq 0 ]]; then
 fi
 
 for server in "${serverList[@]}"; do
-  webServer=$(ini-parse "${currentPath}/../env.properties" "yes" "${server}" "webServer")
+  webServer=$(ini-parse "${currentPath}/../env.properties" "no" "${server}" "webServer")
+
   if [[ -n "${webServer}" ]]; then
     type=$(ini-parse "${currentPath}/../env.properties" "yes" "${server}" "type")
+
     if [[ "${type}" == "local" ]]; then
-      webPath=$(ini-parse "${currentPath}/../env.properties" "yes" "${server}" "webPath")
       echo "--- Dumping on local server: ${server} ---"
+      webPath=$(ini-parse "${currentPath}/../env.properties" "yes" "${webServer}" "path")
 
-      #if [[ ${git} -eq 1 ]]; then
-      #    git clone ${repoUrl} /tmp/repo
-      #    cd /tmp/repo
-      #    masterExists=$(git rev-parse --verify master 2>/dev/null | wc -l)
-      #    if [[ ${masterExists} -eq 1 ]]; then
-      #        git checkout -b production-${date} master
-      #    fi
-      #    cd ..
-      #fi
-
-      rsyncExcludeList=/tmp/dump-rsync-exclude.list
+      rsyncExcludeList="${sourceTempPath}/dump-rsync-exclude.list"
       cat "${dumpExcludeList}" | cut -c 2- > "${rsyncExcludeList}"
+      echo "/.git" >> "${rsyncExcludeList}"
+      echo "/.gitignore" >> "${rsyncExcludeList}"
       echo "/vcs-info.txt" >> "${rsyncExcludeList}"
-      echo "Syncing files from path: ${webPath} to path: /tmp/repo/"
-      rsync --recursive --checksum --executability --no-owner --no-group --delete --force --verbose "--exclude-from=${rsyncExcludeList}" --quiet "${webPath}/" /tmp/repo/
-      echo "Cleaning up code"
-      find /tmp/repo/ -type d -empty -not -path "*/.git/*" -delete
 
-      cd /tmp/repo
-      #if [[ ${git} -eq 1 ]]; then
-      #    git config user.name "Tofex Install"
-      #    git config user.email "install@tofex.de"
-      #    git add --all
-      #    git commit -m "Added production files on ${date}"
-      #    if [[ ${masterExists} -eq 1 ]]; then
-      #        git push -u origin production-${date} | cat
-      #    else
-      #        git push -u origin master | cat
-      #    fi
-      #else
-        dumpPath="${currentPath}/dumps"
-        mkdir -p "${dumpPath}"
-        echo "Creating dump file at: ${dumpPath}/source-${date}.tar.gz"
-        tar -zcf "${dumpPath}/source-${date}.tar.gz" .
-        if [[ "${upload}" -eq 1 ]]; then
-          "${currentPath}/upload-dump.sh" -d "${date}"
-        fi
-      #fi
+      rsyncIncludeList="${sourceTempPath}/dump-rsync-include.list"
+      cat "${dumpIncludeList}" | cut -c 2- > "${rsyncIncludeList}"
+
+      echo "Syncing files from path: ${webPath} to path: ${dumpRepoPath}"
+      rsync --recursive --checksum --executability --no-owner --no-group --delete --force --verbose "--exclude-from=${rsyncExcludeList}" --quiet "${webPath}/" "${dumpRepoPath}/"
+      rsync --recursive --checksum --executability --no-owner --no-group --force --verbose "--files-from=${rsyncIncludeList}" --quiet "${webPath}/" "${dumpRepoPath}/"
+
+      echo "Cleaning up code"
+      find "${dumpRepoPath}/" -type d -empty -delete
+
+      dumpPath="${sourcePath}/dumps"
+      mkdir -p "${dumpPath}"
+      echo "Creating dump file at: ${dumpPath}/source-${date}.tar.gz"
+      cd "${dumpRepoPath}"
+      tar -zcf "${dumpPath}/source-${date}.tar.gz" .
       cd "${currentPath}"
 
+      if [[ "${upload}" -eq 1 ]]; then
+        "${currentPath}/upload-dump.sh" -d "${date}"
+      fi
+
       echo "Removing synced files"
-      rm -rf /tmp/repo
+      rm -rf "${dumpRepoPath}"
     fi
   fi
 done
